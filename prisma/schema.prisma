@@ -1,0 +1,42 @@
+// prisma/schema.prisma
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  user_id     String
+  total_price Decimal     @db.Decimal(10, 2)
+  status      OrderStatus @default(PENDING)
+  created_at  DateTime    @default(now())
+  updated_at  DateTime    @updatedAt
+  items       OrderItem[]
+
+  @@index([user_id])
+  @@map("orders")
+}
+
+model OrderItem {
+  id       String  @id @default(uuid())
+  order_id String
+  book_id  String
+  quantity Int
+  price    Decimal @db.Decimal(10, 2) // price at time of order (snapshot)
+  order    Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
+  @@map("order_items")
+}
