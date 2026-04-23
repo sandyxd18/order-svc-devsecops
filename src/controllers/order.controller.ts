@@ -92,6 +92,29 @@ export const OrderController = {
   },
 
   /**
+   * GET /orders
+   * Get all orders. Access: admin only.
+   */
+  async getAllOrders(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parsed = paginationSchema.safeParse(req.query);
+      if (!parsed.success) {
+        sendError(res, "Invalid pagination params", 400, parsed.error.flatten());
+        return;
+      }
+
+      const result = await OrderService.getAllOrders(
+        parsed.data.page,
+        parsed.data.limit
+      );
+      sendSuccess(res, result);
+
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
    * PATCH /orders/:id/status
    * Update order status. Admin only.
    */
@@ -101,6 +124,19 @@ export const OrderController = {
       if (!parsed.success) {
         sendError(res, "Validation failed", 400, parsed.error.flatten());
         return;
+      }
+
+      const orderToUpdate = await OrderService.getOrderById(req.params.id);
+
+      if (req.user && req.user.role !== "admin") {
+        if (orderToUpdate.user_id !== req.user.sub) {
+          sendError(res, "Access denied. You do not own this order.", 403);
+          return;
+        }
+        if (parsed.data.status !== "CANCELLED") {
+          sendError(res, "Access denied. Users can only cancel orders.", 403);
+          return;
+        }
       }
 
       const order = await OrderService.updateOrderStatus(req.params.id, parsed.data.status);

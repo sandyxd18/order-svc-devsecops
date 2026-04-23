@@ -2,11 +2,17 @@
 
 import { Router } from "express";
 import { OrderController } from "../controllers/order.controller";
-import { authenticateJWT, authorizeRole } from "../middleware/auth";
+import { authenticateJWT, authorizeRole, authenticateInternalService } from "../middleware/auth";
 
 const router = Router();
 
 // ── All order routes require authentication ───────────────────────────────────
+
+/**
+ * GET /orders
+ * Get all orders — admin only
+ */
+router.get("/", authenticateJWT, authorizeRole("admin"), OrderController.getAllOrders);
 
 /**
  * POST /orders
@@ -29,12 +35,22 @@ router.get("/:id", authenticateJWT, OrderController.getOrder);
 
 /**
  * PATCH /orders/:id/status
- * Update order status — admin only
+ * Update order status — admin or owner (owner can only cancel)
  */
 router.patch(
   "/:id/status",
   authenticateJWT,
-  authorizeRole("admin"),
+  OrderController.updateStatus
+);
+
+/**
+ * PATCH /orders/:id/internal-status
+ * Update order status — internal service-to-service only (payment-service).
+ * Protected by shared secret header (x-internal-secret), not JWT.
+ */
+router.patch(
+  "/:id/internal-status",
+  authenticateInternalService,
   OrderController.updateStatus
 );
 

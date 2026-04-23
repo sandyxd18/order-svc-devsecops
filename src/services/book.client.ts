@@ -172,6 +172,38 @@ export const BookClient = {
       throw new BookServiceUnavailableError(`Failed to reach book-service: ${(err as Error).message}`);
     }
   },
+
+  /**
+   * deductStock
+   * Decrements stock in book-service.
+   * Uses internal service-to-service secret.
+   */
+  async deductStock(bookId: string, quantity: number): Promise<void> {
+    const url = `${env.BOOK_SERVICE_URL}/books/${bookId}/deduct-stock`;
+    
+    try {
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": env.INTERNAL_SERVICE_SECRET,
+        },
+        body: JSON.stringify({ quantity }),
+      });
+
+      if (!res.ok) {
+        const body = await res.text();
+        logger.error("book_service_deduct_stock_failed", { book_id: bookId, status: res.status, response: body });
+        throw new BookServiceUnavailableError(`Failed to deduct stock: ${res.status}`);
+      }
+
+      logger.info("book_service_stock_deducted", { book_id: bookId, quantity });
+    } catch (err) {
+      logger.error("book_service_deduct_stock_error", { book_id: bookId, error: (err as Error).message });
+      // We don't throw here to avoid failing the order status update if stock deduction fails.
+      // In a real system, this should be eventually consistent (e.g. via message queue).
+    }
+  },
 };
 
 // ── Custom Errors ─────────────────────────────────────────────────────────────

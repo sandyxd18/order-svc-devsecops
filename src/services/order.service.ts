@@ -4,6 +4,7 @@
 
 import prisma from "../db/prisma";
 import { BookClient, BookNotFoundError, BookServiceUnavailableError } from "./book.client";
+import { BlockchainClient } from "./blockchain.client";
 import { orderOperationsTotal, orderTotalPrice } from "../observability/metrics";
 import logger from "../observability/logger";
 import type { CreateOrderInput } from "../utils/validators";
@@ -119,6 +120,21 @@ export const OrderService = {
       item_count:  deduped.length,
     });
 
+    // Notify blockchain asynchronously (fire-and-forget)
+    BlockchainClient.addOrderBlock({
+      order_id: order.id,
+      user_id: userId,
+      items: deduped.map(item => ({
+        book_id: item.book_id,
+        quantity: item.quantity,
+        price: books[item.book_id].price.toString(),
+      })),
+      total_price: total,
+      status: "PENDING",
+    }).catch(err => {
+      logger.error("Failed to add order to blockchain", { error: err });
+    });
+
     return order;
   },
 
@@ -167,11 +183,38 @@ export const OrderService = {
   },
 
   /**
+   * getAllOrders
+   * Admin-only: returns paginated list of all orders.
+   */
+  async getAllOrders(page: number, limit: number) {
+    const skip = (page - 1) * limit;
+
+    const [orders, total] = await Promise.all([
+      prisma.order.findMany({
+        skip,
+        take:    limit,
+        orderBy: { created_at: "desc" },
+        include: { items: true },
+      }),
+      prisma.order.count(),
+    ]);
+
+    recordOp("list_all", "success", { page, total });
+    return {
+      orders,
+      pagination: { total, page, limit, total_pages: Math.ceil(total / limit) },
+    };
+  },
+
+  /**
    * updateOrderStatus
    * Admin-only: update order status.
    */
-  async updateOrderStatus(orderId: string, status: "PENDING" | "PAID" | "CANCELLED") {
-    const existing = await prisma.order.findUnique({ where: { id: orderId } });
+  async updateOrderStatus(orderId: string, status: "PENDING" | "PAID" | "CANCELLED" | "EXPIRED") {
+    const existing = await prisma.order.findUnique({ 
+      where: { id: orderId },
+      include: { items: true }
+    });
     if (!existing) throw new NotFoundError("Order not found");
 
     const updated = await prisma.order.update({
@@ -179,6 +222,13 @@ export const OrderService = {
       data:  { status },
       include: { items: true },
     });
+
+    if (status === "PAID" && existing.status !== "PAID") {
+      // Best effort stock deduction.
+      await Promise.allSettled(
+        updated.items.map(item => BookClient.deductStock(item.book_id, item.quantity))
+      );
+    }
 
     recordOp("update_status", "success", { order_id: orderId, status });
     return updated;

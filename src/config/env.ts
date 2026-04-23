@@ -1,7 +1,7 @@
 // src/config/env.ts
 // Centralized env var validation — fails fast at startup if required vars are missing.
 
-const required = ["DATABASE_URL", "JWT_SECRET", "BOOK_SERVICE_URL"] as const;
+const required = ["DATABASE_URL", "JWT_SECRET", "BOOK_SERVICE_URL", "BLOCKCHAIN_SERVICE_URL"] as const;
 
 for (const key of required) {
   if (!process.env[key]) {
@@ -24,6 +24,10 @@ export const env = {
 
   // Inter-service
   BOOK_SERVICE_URL: process.env.BOOK_SERVICE_URL as string,
+  BLOCKCHAIN_SERVICE_URL: process.env.BLOCKCHAIN_SERVICE_URL as string,
+
+  // Internal service-to-service auth (shared secret with payment-service)
+  INTERNAL_SERVICE_SECRET: process.env.INTERNAL_SERVICE_SECRET ?? "bookstore-internal-svc-2024",
 
   // Observability
   SERVICE_NAME:                process.env.SERVICE_NAME    ?? "order-service",
