@@ -13,6 +13,7 @@ Production-ready order microservice for an online bookstore with inter-service c
 | Database | PostgreSQL + Prisma |
 | Auth | JWT (shared secret with auth-service) |
 | Inter-service | REST → book-service (fetch + retry + circuit breaker) |
+| Inter-service | REST → blockchain-service (async recording) |
 | Validation | Zod |
 | Metrics | prom-client → Prometheus |
 | Logs | Winston (JSON) → Alloy → Loki |
@@ -46,7 +47,8 @@ order-service/
 │   │   └── order.routes.ts        # Route definitions
 │   ├── services/
 │   │   ├── book.client.ts         # HTTP client → book-service (retry + circuit breaker)
-│   │   └── order.service.ts       # Business logic
+│   │   ├── blockchain.client.ts   # HTTP client → blockchain-service
+│   │   └── order.service.ts       # Business logic (Stock deduction, Blockchain sync)
 │   ├── utils/
 │   │   ├── response.ts            # Standardized API response helpers
 │   │   └── validators.ts          # Zod schemas
@@ -120,10 +122,12 @@ bun run start   # production
 |---|---|---|---|---|
 | GET | `/health` | — | — | Health check |
 | GET | `/metrics` | — | — | Prometheus metrics scrape |
+| GET | `/orders` | ✅ JWT | admin | List all orders (paginated) |
 | POST | `/orders` | ✅ JWT | any | Create order |
 | GET | `/orders/:id` | ✅ JWT | owner/admin | Get order by ID |
 | GET | `/orders/user/:userId` | ✅ JWT | owner/admin | Get user's orders (paginated) |
-| PATCH | `/orders/:id/status` | ✅ JWT | admin | Update order status |
+| PATCH | `/orders/:id/status` | ✅ JWT | admin/owner | Update order status |
+| PATCH | `/orders/:id/internal-status` | ✅ Internal | service | Status update (payment-service) |
 
 ---
 
@@ -239,15 +243,15 @@ GET /orders/user/user-uuid?page=1&limit=10
 
 ---
 
-### PATCH /orders/:id/status
+Update order status.
+- **Admin**: Can set to `PAID`, `CANCELLED`, or `EXPIRED`.
+- **Owner**: Can only set to `CANCELLED` (if current status is `PENDING`).
 
-Update order status (admin only).
-
-**Headers:** `Authorization: Bearer <admin-token>`
+**Headers:** `Authorization: Bearer <token>`
 
 **Request:**
 ```json
-{ "status": "PAID" }
+{ "status": "CANCELLED" }
 ```
 
 **200 OK:**
@@ -255,8 +259,22 @@ Update order status (admin only).
 {
   "success": true,
   "message": "Order status updated",
-  "data": { "id": "order-uuid", "status": "PAID", "..." : "..." }
+  "data": { "id": "order-uuid", "status": "CANCELLED" }
 }
+```
+
+---
+
+### PATCH /orders/:id/internal-status
+
+Internal service-to-service endpoint used by the `payment-service` to confirm payments.
+
+**Headers:** `x-internal-secret: <INTERNAL_SERVICE_SECRET>`
+
+**Request:**
+```json
+{ "status": "PAID" }
+```
 ```
 
 ---
@@ -285,6 +303,10 @@ Update order status (admin only).
 
 > When the circuit is open, order creation fails immediately with `503` instead of waiting for timeouts — protecting the order-service from cascading failures.
 
+### Blockchain-Service Client
+
+`src/services/blockchain.client.ts` implements asynchronous recording of order events. When an order is created, a block containing the order summary is sent to the blockchain-service to ensure an immutable audit trail. Failures to reach the blockchain-service are logged but do not block order creation (fire-and-forget).
+
 ---
 
 ## Order Flow
@@ -305,8 +327,19 @@ User                    Order Service                Book Service
  │                           │  [calculate total]         │
  │                           │  [save order + items]      │
  │                           │                            │
+ │                           │  [async blockchain record] │
+ │                           │───────────────────────────►│ (Blockchain Service)
+ │                           │                            │
  │  ◄── order created ──────│                            │
 ```
+
+### Payment & Fulfillment Flow
+
+When a payment is confirmed by the `payment-service`:
+
+1.  `payment-service` calls `PATCH /orders/:id/internal-status` with `{ status: "PAID" }`.
+2.  `order-service` updates the database.
+3.  `order-service` calls `PATCH /books/:id/deduct-stock` for each item in the order to finalize inventory.
 
 ---
 
