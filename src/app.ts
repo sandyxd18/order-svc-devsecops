@@ -11,7 +11,22 @@ export function createApp() {
   const app = express();
 
   app.disable("x-powered-by");
-  app.use(cors());
+  // Allowed origins — loaded from CORS_ALLOWED_ORIGINS env variable (comma-separated).
+  const allowedOrigins: string[] = process.env.CORS_ALLOWED_ORIGINS
+    ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+    : ["http://localhost", "http://localhost:80", "http://localhost:8081", "http://localhost:5173", "http://localhost:5174"];
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }));
   app.use(express.json({ limit: "10kb" }));
   app.use(express.urlencoded({ extended: false }));
 
