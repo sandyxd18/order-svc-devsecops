@@ -1,7 +1,15 @@
 // src/config/env.ts
 // Centralized env var validation — fails fast at startup if required vars are missing.
 
-const required = ["DATABASE_URL", "JWT_SECRET", "BOOK_SERVICE_URL", "BLOCKCHAIN_SERVICE_URL"] as const;
+const required = [
+  "DATABASE_URL",
+  "JWT_SECRET",
+  "BOOK_SERVICE_URL",
+  "BLOCKCHAIN_SERVICE_URL",
+  "INTERNAL_SERVICE_SECRET",
+  "OTEL_EXPORTER_OTLP_ENDPOINT",
+  "LOKI_HOST",
+] as const;
 
 for (const key of required) {
   if (!process.env[key]) {
@@ -27,11 +35,11 @@ export const env = {
   BLOCKCHAIN_SERVICE_URL: process.env.BLOCKCHAIN_SERVICE_URL as string,
 
   // Internal service-to-service auth (shared secret with payment-service)
-  INTERNAL_SERVICE_SECRET: process.env.INTERNAL_SERVICE_SECRET ?? "bookstore-internal-svc-2024",
+  INTERNAL_SERVICE_SECRET: process.env.INTERNAL_SERVICE_SECRET as string,
 
   // Observability
   SERVICE_NAME:                process.env.SERVICE_NAME    ?? "order-service",
   SERVICE_VERSION:             process.env.SERVICE_VERSION ?? "1.0.0",
-  OTEL_EXPORTER_OTLP_ENDPOINT: process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "http://alloy:4317",
-  LOKI_HOST:                   process.env.LOKI_HOST       ?? "http://loki:3100",
+  OTEL_EXPORTER_OTLP_ENDPOINT: process.env.OTEL_EXPORTER_OTLP_ENDPOINT as string,
+  LOKI_HOST:                   process.env.LOKI_HOST as string,
 };

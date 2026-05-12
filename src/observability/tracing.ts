@@ -16,10 +16,11 @@ import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { Resource } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
 import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
+import { env } from "../config/env";
 
-const SERVICE_NAME    = process.env.SERVICE_NAME    ?? "order-service";
-const SERVICE_VERSION = process.env.SERVICE_VERSION ?? "1.0.0";
-const OTLP_ENDPOINT   = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "http://alloy:4317";
+const SERVICE_NAME    = env.SERVICE_NAME;
+const SERVICE_VERSION = env.SERVICE_VERSION;
+const OTLP_ENDPOINT   = env.OTEL_EXPORTER_OTLP_ENDPOINT;
 
 const traceExporter = new OTLPTraceExporter({
   url: `${OTLP_ENDPOINT}/v1/traces`,
