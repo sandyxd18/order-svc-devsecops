@@ -9,8 +9,11 @@ RUN apk add --no-cache openssl
 
 COPY package.json bun.lock* bun.lockb* ./
 
-# Install dependencies (fresh resolve if no lockfile exists)
-RUN bun install
+RUN if [ -f bun.lockb ]; then \
+  bun install --frozen-lockfile; \
+  else \
+  bun install; \
+  fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — builder
@@ -40,7 +43,7 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 
 RUN addgroup --system --gid 1001 appgroup && \
-    adduser  --system --uid 1001 --ingroup appgroup appuser
+  adduser  --system --uid 1001 --ingroup appgroup appuser
 
 COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
 COPY --from=builder --chown=appuser:appgroup /app/src         ./src
@@ -52,9 +55,9 @@ RUN chmod +x ./entrypoint.sh
 
 USER appuser
 
-EXPOSE 8000
+EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:8000/health || exit 1
+  CMD wget -qO- http://localhost:3000/health || exit 1
 
 ENTRYPOINT ["sh", "./entrypoint.sh"]
