@@ -35,6 +35,9 @@
     "prisma": "^5.14.0"
   },
   "overrides": {
-    "uuid": "14.0.0"
+    "uuid": "14.0.0",
+    "@opentelemetry/auto-instrumentations-node": ">=0.75.0",
+    "@opentelemetry/sdk-node": ">=0.217.0",
+    "@opentelemetry/instrumentation": ">=0.55.0"
   }
 }
